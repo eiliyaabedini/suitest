@@ -155,3 +155,34 @@ async def test_cancelling_stream_closes_upstream_response() -> None:
         await asyncio.sleep(0)
 
     assert stream.closed is True
+
+
+@pytest.mark.asyncio
+async def test_oversized_stream_tail_after_complete_line_is_rejected() -> None:
+    async def token_provider(force_refresh: bool) -> str:
+        return "test-token"
+
+    oversized_delta = b"x" * (1024 * 1024 + 1)
+    payload = b': keepalive\ndata: {"choices":[{"delta":{"content":"' + oversized_delta + b'"}}]}'
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            content=payload,
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = AiPassProvider(token_provider=token_provider, http_client=client)
+        with pytest.raises(ProviderError) as caught:
+            _ = [
+                chunk
+                async for chunk in provider.stream_complete(
+                    ModelCall(
+                        model="live-model",
+                        messages=[ChatMessage(role="user", content="hello")],
+                    )
+                )
+            ]
+
+    assert caught.value.code == "AIPASS_RESPONSE_TOO_LARGE"

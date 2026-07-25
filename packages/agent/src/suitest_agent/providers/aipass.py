@@ -312,6 +312,11 @@ class AiPassProvider:
                     tokens_out = parsed.tokens_out
                 if parsed.delta:
                     yield parsed
+            if len(buffer) > _MAX_STREAM_LINE_BYTES:
+                raise ProviderError(
+                    "AIPASS_RESPONSE_TOO_LARGE",
+                    "AI Pass stream frame exceeds the configured size limit.",
+                )
         if buffer.strip():
             parsed = AiPassProvider._parse_stream_line(buffer.rstrip(b"\r"))
             if parsed is not None:
