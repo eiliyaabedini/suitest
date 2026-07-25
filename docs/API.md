@@ -672,6 +672,23 @@ Side-effects:
 - `PUT` ⇒ recompute `workspace_capabilities` row (tier may flip ZERO → CLOUD/LOCAL) + emit `capability.changed` WS event.
 - `DELETE` ⇒ tier returns to ZERO; running agent sessions complete on current LLM, new ones rejected.
 
+#### AI Pass account connection
+
+AI Pass is an optional OAuth account connection alongside the existing provider form. It never accepts an API key. All OAuth exchanges, token refreshes, model discovery, and chat authorization happen server-side.
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/workspaces/:id/aipass/connection` | Return deployment/connection/activation status only |
+| POST | `/workspaces/:id/aipass/authorize` | Same-site form POST; create hashed state + PKCE verifier and 303 to AI Pass |
+| GET | `/aipass/callback` | Fixed registered callback; consume user-bound state and exchange the code server-side |
+| GET | `/workspaces/:id/aipass/models` | Fetch and normalize the authenticated live AI Pass model catalog |
+| PUT | `/workspaces/:id/aipass/connection` | Validate a model against the live catalog and activate AI Pass |
+| DELETE | `/workspaces/:id/aipass/connection` | Revoke access/refresh credentials, erase the connection, and clear an active AI Pass config |
+
+`GET /connection` returns `{configured, connected, active, activeModel}`. `GET /models` returns `{models:[{id,name}]}` and accepts both the OpenAI list envelope and legacy string-array upstream formats. Models are never hard-coded. OAuth codes and bearer credentials are absent from every response schema; callback success/failure is a bounded status code redirected to Settings.
+
+The public client uses Authorization Code + PKCE S256 and no client secret. The fixed callback is `${SUITEST_API_URL}/api/v1/aipass/callback`; deployments must use HTTPS outside localhost and have that exact URI registered for the protected first-party client ID.
+
 ### 3.15 Autonomy
 
 | Method | Path | Purpose |

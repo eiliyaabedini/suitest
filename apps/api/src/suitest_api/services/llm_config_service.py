@@ -52,6 +52,7 @@ _CLOUD_PROVIDERS = frozenset(
         "vertex",
         "deepseek",
         "mock",
+        "aipass",
     }
 )
 # CLOUD providers that authenticate without SUITEST_LLM_API_KEY (IAM / canned creds).
@@ -110,6 +111,11 @@ class LLMConfigService:
         p = provider.strip().lower()
         if p not in known_providers():
             raise LLMConfigError("UNKNOWN_PROVIDER", f"unsupported provider {provider!r}")
+        if p == "aipass":
+            raise LLMConfigError(
+                "AIPASS_OAUTH_REQUIRED",
+                "Connect AI Pass with OAuth instead of entering an API key.",
+            )
         if not model.strip():
             raise LLMConfigError("INVALID_MODEL", "model is required")
         if p in _LOCAL_PROVIDERS and not base_url:
@@ -131,6 +137,32 @@ class LLMConfigService:
         base_url = config.get("base_url") if isinstance(config.get("base_url"), str) else None
         self._validate(provider, model, api_key, base_url if isinstance(base_url, str) else None)
 
+        return await self._persist_config(
+            provider=provider,
+            model=model,
+            api_key=api_key,
+            config=config,
+        )
+
+    async def activate_aipass(self, *, model: str) -> LLMConfig:
+        """Activate an OAuth-connected AI Pass model without an API-key field."""
+        if not model.strip():
+            raise LLMConfigError("INVALID_MODEL", "model is required")
+        return await self._persist_config(
+            provider="aipass",
+            model=model,
+            api_key=None,
+            config={},
+        )
+
+    async def _persist_config(
+        self,
+        *,
+        provider: str,
+        model: str,
+        api_key: str | None,
+        config: dict[str, object],
+    ) -> LLMConfig:
         existing = await self.get_active()
         if existing is not None:
             await self._llm.update(
@@ -169,7 +201,7 @@ class LLMConfigService:
         await self._session.refresh(row)
         return row
 
-    async def clear_config(self) -> bool:
+    async def clear_config(self, *, commit: bool = True) -> bool:
         """Deactivate the active config; tier returns to env/ZERO. Returns found."""
         existing = await self.get_active()
         if existing is None:
@@ -185,7 +217,8 @@ class LLMConfigService:
             resource_id=existing.id,
             metadata={"provider": existing.provider},
         )
-        await self._session.commit()
+        if commit:
+            await self._session.commit()
         return True
 
     async def _refresh_capability(self, tier: CoreTier) -> None:

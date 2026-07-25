@@ -572,6 +572,54 @@ export async function fetchLlmModels(workspaceId: string, provider: string): Pro
 }
 
 // ---------------------------------------------------------------------------
+// AI Pass account connection — OAuth credentials remain server-side. These
+// helpers expose connection status and the live model catalog only.
+// ---------------------------------------------------------------------------
+
+export interface AiPassConnection {
+  configured: boolean;
+  connected: boolean;
+  active: boolean;
+  activeModel?: string | null;
+}
+
+export interface AiPassModel {
+  id: string;
+  name: string;
+}
+
+export async function fetchAiPassConnection(workspaceId: string): Promise<AiPassConnection> {
+  const res = await api.get<AiPassConnection>(`/workspaces/${workspaceId}/aipass/connection`);
+  return res.data;
+}
+
+export async function fetchAiPassModels(workspaceId: string): Promise<AiPassModel[]> {
+  const res = await api.get<{ models: AiPassModel[] }>(
+    `/workspaces/${workspaceId}/aipass/models`,
+  );
+  return res.data.models;
+}
+
+export async function activateAiPassConnection(
+  workspaceId: string,
+  model: string,
+): Promise<AiPassConnection> {
+  const res = await api.put<AiPassConnection>(`/workspaces/${workspaceId}/aipass/connection`, {
+    model,
+  });
+  return res.data;
+}
+
+export async function disconnectAiPassConnection(
+  workspaceId: string,
+): Promise<{ revoked: boolean }> {
+  const res = await api.delete<{ revoked: boolean }>(
+    `/workspaces/${workspaceId}/aipass/connection`,
+  );
+  return res.data;
+}
+
+// ---------------------------------------------------------------------------
 // Workspace cost tracking (M3-14) — Insights → Cost.
 // ---------------------------------------------------------------------------
 

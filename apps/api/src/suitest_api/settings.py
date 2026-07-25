@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     database_url: str = Field(default="postgresql+asyncpg://suitest:suitest@localhost:5432/suitest")
     oauth_google_client_id: str = Field(default="")
     oauth_google_client_secret: str = Field(default="")
+    # First-party AI Pass OAuth public client id. It is injected from protected
+    # runtime configuration and intentionally uses SecretStr so settings repr /
+    # validation errors never print the value. There is no client secret.
+    aipass_client_id: SecretStr = Field(default_factory=lambda: SecretStr(""))
     superadmin_email: str = Field(default="")
     superadmin_password: str = Field(default="", repr=False)
     superadmin_workspace_name: str = Field(default="Default Workspace")

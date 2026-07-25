@@ -16,12 +16,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from suitest_agent.providers.base import ChatMessage, ModelCall, ProviderError
-from suitest_agent.providers.litellm_router import get_provider
 from suitest_db.repositories.llm_configs import LLMConfigRepo
 
 from suitest_api.auth.db import get_async_session
 from suitest_api.deps.api_key import tenant_via_api_key_or_session
 from suitest_api.deps.scope import TenantContext
+from suitest_api.services.aipass_oauth_service import build_workspace_llm_provider
 
 router = APIRouter(prefix="/api/v1", tags=["llm"])
 
@@ -62,8 +62,10 @@ async def llm_complete(
             detail="no active LLM configured for this workspace",
         )
     base_url = config.config_json.get("base_url")
-    provider = get_provider(
-        config.provider,
+    provider = build_workspace_llm_provider(
+        session,
+        workspace_id=ctx.workspace_id,
+        provider=config.provider,
         api_key=config.api_key_encrypted,
         base_url=base_url if isinstance(base_url, str) else None,
     )

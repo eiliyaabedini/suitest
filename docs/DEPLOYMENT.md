@@ -165,6 +165,25 @@ SUITEST_SUPERADMIN_WORKSPACE_NAME=Default Workspace
 There is no LLM env dial: the tier is upgraded per workspace from the web UI
 (Settings → LLM), and the key is stored AES-GCM encrypted in the database.
 
+### 1.4.1 Optional AI Pass account connection
+
+AI Pass is disabled by default and ZERO remains fully functional. To enable **Connect AI Pass**:
+
+1. Obtain the existing first-party public client ID through the protected deployment channel. Set it as `SUITEST_AIPASS_CLIENT_ID`; do not place its value in image layers, Compose YAML, Helm values, logs, support output, or committed files.
+2. Register the exact fixed callback `${SUITEST_API_URL}/api/v1/aipass/callback` for that client before setting the runtime client ID. Production `SUITEST_API_URL` must be HTTPS. A client ID without the exact callback registration is not a working integration; authorization fails closed if the platform prerequisite is absent.
+3. Keep `SUITEST_ENCRYPTION_KEY` stable and protected. OAuth access/refresh tokens and PKCE verifiers use the same AES-GCM server-side storage as other Suitest secrets.
+4. Allow API and runner HTTPS egress to `aipass.one`. If the shipped default-deny NetworkPolicy is enabled, add the required egress CIDRs to `networkPolicy.egressCidrs` or enforce an equivalent FQDN policy with the cluster CNI.
+
+Compose reads `SUITEST_AIPASS_CLIENT_ID` from the runtime environment. The Helm chart never accepts the value inline; reference an operator-managed Secret:
+
+```yaml
+aipass:
+  existingSecretName: suitest-aipass
+  clientIdSecretKey: SUITEST_AIPASS_CLIENT_ID
+```
+
+The account authorization and token exchange follow AI Pass discovery metadata. Model discovery and chat use the connected user's shared wallet. Disconnect attempts revocation and erases the local encrypted credentials even if revocation cannot be confirmed.
+
 ### 1.5 Reverse proxy & TLS
 
 Production compose: add `traefik` or `caddy` in front as the TLS terminator. Example with Caddy:

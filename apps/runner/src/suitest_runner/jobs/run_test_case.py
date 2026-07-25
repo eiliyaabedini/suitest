@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Protocol, cast, runtime_checkable
 
 import structlog
 from suitest_agent.graphs.execution import translate_single_step
-from suitest_agent.providers.litellm_router import get_provider
+from suitest_api.services.aipass_oauth_service import build_workspace_llm_provider
 from suitest_db.models.project import Project
 from suitest_db.repositories.llm_configs import LLMConfigRepo
 from suitest_db.repositories.run_step_logs import RunStepLogRepo
@@ -104,8 +104,10 @@ async def _build_translator(
     if llm is None:
         return None
     base_url = llm.config_json.get("base_url")
-    provider = get_provider(
-        llm.provider,
+    provider = build_workspace_llm_provider(
+        session,
+        workspace_id=workspace_id,
+        provider=llm.provider,
         api_key=llm.api_key_encrypted,
         base_url=base_url if isinstance(base_url, str) else None,
     )

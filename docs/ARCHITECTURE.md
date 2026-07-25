@@ -2,7 +2,7 @@
 
 > Tech stack, services, and deployment topology for the Suitest **OSS pivot** (Python/FastAPI, MCP-native, BYO LLM). A diff against this doc is mandatory when adding/replacing components.
 
-> ℹ️ **Built today:** `apps/api`, `apps/runner`, `apps/web`, `packages/db|mcp|core|shared`. `packages/agent` LLM foundation is built (M3-1..M3-5): LiteLLM provider layer (lazy-imported, ZERO-safe) + deterministic mock, LangGraph state machines for the 4 modes, versioned prompts + drift guard, `LLMConfig` API/UI + tier refresh. LLM-driven generators (M3-6..M3-9), runtime translation (M3-10), diagnosis wiring (M3-11), chat/streaming (M3-12/13), cost+autonomy (M3-14..16), and the eval CI job are not built yet. See [ROADMAP.md](./ROADMAP.md).
+> ℹ️ **Built today:** `apps/api`, `apps/runner`, `apps/web`, `packages/db|mcp|core|shared`, the M3 agent/runtime surface, and the optional AI Pass OAuth account connection (M3-17). See [ROADMAP.md](./ROADMAP.md) for current build status.
 
 ---
 
@@ -45,7 +45,7 @@
         └──────────────────────────┘
 ```
 
-The LLM provider is **BYO** (Bring-Your-Own) — routed via LiteLLM. The `ZERO` tier runs without any LLM container at all (the resolver disables the AI modules). See [CAPABILITY_TIERS.md](./CAPABILITY_TIERS.md).
+LLM access is optional. Existing providers are **BYO** (Bring-Your-Own) and routed via LiteLLM. AI Pass is connected as an OAuth account and uses the connected user's shared wallet; it is not an API-key field. The `ZERO` tier runs without any LLM container or account connection. See [CAPABILITY_TIERS.md](./CAPABILITY_TIERS.md).
 
 ---
 
@@ -192,6 +192,7 @@ Details: [MCP_PLUGINS.md](./MCP_PLUGINS.md).
 | Service | Purpose | SDK / Mechanism |
 |---------|--------|-----------------|
 | LLM providers (any 100+) | LLM completion / embeddings | LiteLLM router |
+| AI Pass | Account-backed LLM completion + live model catalog | OAuth2 Authorization Code + PKCE; server-side httpx provider |
 | Jira Cloud | Issue tracker | REST API v3 (httpx) |
 | Linear | Issue tracker | GraphQL via httpx |
 | Slack | Notifications | Incoming webhook |
@@ -350,7 +351,10 @@ GitHub Actions workflows in `.github/workflows/`:
 
 - TLS terminated at the ingress (nginx / Traefik / cloud LB)
 - Secrets via Docker secret / k8s Secret / external secret operator — **never** in the repo
-- LLM API keys stored **encrypted (AES-GCM, HKDF key derivation from `SUITEST_ENCRYPTION_KEY`)** in `llm_config.api_key_ciphertext`
+- LLM API keys stored **encrypted with AES-256-GCM** from `SUITEST_ENCRYPTION_KEY` in `llm_configs.api_key_encrypted`
+- AI Pass access/refresh tokens and PKCE verifiers stored AES-GCM encrypted server-side; OAuth state is random, user-bound, hashed at rest, ten-minute TTL, and single-use
+- AI Pass refresh rotation is committed under a row lock; disconnect attempts revocation and always clears local credentials
+- Browser JavaScript receives connection/model status only, never OAuth bearer credentials
 - User passwords via FastAPI-Users (argon2 default)
 - API tokens hashed (argon2) in the DB
 - WebSocket auth via Bearer token at handshake (query param or header)
@@ -365,18 +369,18 @@ GitHub Actions workflows in `.github/workflows/`:
 
 Implemented in `packages/core/capabilities.py`. Algorithm:
 
-1. Read the `SUITEST_LLM_PROVIDER` env at process startup.
-2. Map provider → tier:
+1. Resolve the immutable deployment base as ZERO.
+2. Read the active workspace `LLMConfig` and map provider → tier:
    - `none` / unset → **ZERO**
    - `ollama` / `llamacpp` / `vllm` / `lmstudio` → **LOCAL**
-   - everything else (cloud SaaS) → **CLOUD**
-3. Validate the combination (e.g. cloud providers require an API key, except Bedrock/Vertex IAM).
-4. Cache the result in memory + expose it via `GET /capabilities`.
-5. The frontend fetches once at boot, stores it in Zustand `useCapabilities()`.
+   - everything else (cloud SaaS, test provider, or connected AI Pass) → **CLOUD**
+3. Validate configuration on write. Existing cloud providers require their normal credential path; AI Pass can only be activated after an OAuth connection and live-model validation.
+4. Materialize `WorkspaceCapability` and overlay the active config on `GET /capabilities`.
+5. The frontend refreshes the capability query after configuration changes.
 
 > The former step "resolve `SUITEST_EMBEDDINGS_BACKEND` independently" is gone — that env var no longer exists (embeddings are no longer an env dial; see CAPABILITY_TIERS.md §5).
 
-Workspace-level overrides (via DB-stored `LLMConfig`) are handled via a reload signal — restart `api` + `runner` when the config changes.
+Workspace-level configuration takes effect without restarting `api` or `runner`.
 
 Full spec: [CAPABILITY_TIERS.md](./CAPABILITY_TIERS.md).
 

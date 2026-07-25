@@ -110,6 +110,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/aipass/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Callback Aipass
+         * @description Consume the single-use state and exchange the code entirely server-side.
+         */
+        get: operations["callback_aipass_api_v1_aipass_callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/analytics/coverage": {
         parameters: {
             query?: never;
@@ -160,6 +180,9 @@ export interface paths {
         /**
          * Analytics Heatmap
          * @description Run-count grid (day x hour) over the window (docs/API.md §3.8).
+         *
+         *     Accepts ``days=<n>`` (what the web client sends) or ``period=<n>d``; ``days``
+         *     wins when both are present.
          */
         get: operations["analytics_heatmap_api_v1_analytics_heatmap_get"];
         put?: never;
@@ -553,6 +576,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/files/raw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get File Raw
+         * @description Stream one owned object from disk (local mode — the signed-url target).
+         */
+        get: operations["get_file_raw_api_v1_files_raw_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/files/signed-url": {
         parameters: {
             query?: never;
@@ -802,6 +845,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingest/resolve-project": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve Project Binding
+         * @description Validate/repair a publisher's project binding (read-only, never creates).
+         */
+        post: operations["resolve_project_binding_api_v1_ingest_resolve_project_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/integrations": {
         parameters: {
             query?: never;
@@ -979,6 +1042,26 @@ export interface paths {
         put?: never;
         /** Revoke Invitation */
         post: operations["revoke_invitation_api_v1_invitations__invitation_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/llm/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Llm Complete
+         * @description Proxy one completion through the workspace's active LLM provider.
+         */
+        post: operations["llm_complete_api_v1_llm_complete_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1661,7 +1744,7 @@ export interface paths {
         put?: never;
         /**
          * Ingest Completed Run
-         * @description Record an already-completed run (run + run_steps + artifacts). No ARQ enqueue.
+         * @description Start, append to, or finalize an externally-executed run. No ARQ enqueue.
          */
         post: operations["ingest_completed_run_api_v1_runs_ingest_post"];
         delete?: never;
@@ -1757,6 +1840,26 @@ export interface paths {
          *     captured even though the actual fetch happens directly against S3.
          */
         get: operations["get_artifact_signed_url_api_v1_runs__run_id__artifacts__artifact_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/artifacts/{artifact_id}/raw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Artifact Raw
+         * @description Stream one ``local://`` artifact from ``SUITEST_ARTIFACTS_DIR`` (local mode).
+         */
+        get: operations["get_artifact_raw_api_v1_runs__run_id__artifacts__artifact_id__raw_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2490,6 +2593,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspaceId}/aipass/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Authorize Aipass
+         * @description Start a same-site form POST, then redirect to AI Pass authorization.
+         */
+        post: operations["authorize_aipass_api_v1_workspaces__workspaceId__aipass_authorize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/aipass/connection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Aipass Connection */
+        get: operations["get_aipass_connection_api_v1_workspaces__workspaceId__aipass_connection_get"];
+        /** Activate Aipass */
+        put: operations["activate_aipass_api_v1_workspaces__workspaceId__aipass_connection_put"];
+        post?: never;
+        /** Disconnect Aipass */
+        delete: operations["disconnect_aipass_api_v1_workspaces__workspaceId__aipass_connection_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/aipass/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Aipass Models */
+        get: operations["list_aipass_models_api_v1_workspaces__workspaceId__aipass_models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspaceId}/api-keys": {
         parameters: {
             query?: never;
@@ -3173,6 +3332,34 @@ export interface components {
              */
             version: string;
         };
+        /** AiPassActivateBody */
+        AiPassActivateBody: {
+            /** Model */
+            model: string;
+        };
+        /** AiPassConnectionPublic */
+        AiPassConnectionPublic: {
+            /** Active */
+            active: boolean;
+            /** Activemodel */
+            activeModel?: string | null;
+            /** Configured */
+            configured: boolean;
+            /** Connected */
+            connected: boolean;
+        };
+        /** AiPassDisconnectPublic */
+        AiPassDisconnectPublic: {
+            /** Revoked */
+            revoked: boolean;
+        };
+        /** AiPassModelsPublic */
+        AiPassModelsPublic: {
+            /** Models */
+            models: {
+                [key: string]: string;
+            }[];
+        };
         /**
          * ApiKeyCreateRequest
          * @description Create a key for the current workspace.
@@ -3505,12 +3692,30 @@ export interface components {
             /** Cases */
             cases?: components["schemas"]["IngestCase"][];
             /**
+             * Markstale
+             * @default false
+             */
+            markStale: boolean;
+            /**
              * Mode
              * @default backend
              */
             mode: string;
-            /** Projectid */
+            /**
+             * Projectid
+             * @default
+             */
             projectId: string;
+            /**
+             * Projectname
+             * @default
+             */
+            projectName: string;
+            /**
+             * Projectslug
+             * @default
+             */
+            projectSlug: string;
             /** Suitename */
             suiteName: string;
         };
@@ -3518,6 +3723,13 @@ export interface components {
         BulkImportResult: {
             /** Imported */
             imported?: components["schemas"]["ImportedCase"][];
+            /**
+             * Projectid
+             * @default
+             */
+            projectId: string;
+            /** Stale */
+            stale?: string[];
             /** Suiteid */
             suiteId: string;
         };
@@ -4497,6 +4709,11 @@ export interface components {
              */
             error: string;
             /**
+             * Failurekind
+             * @default
+             */
+            failureKind: string;
+            /**
              * Name
              * @default
              */
@@ -4550,6 +4767,11 @@ export interface components {
              * @default
              */
             screenshot: string;
+            /**
+             * Screenshotsizebytes
+             * @default 0
+             */
+            screenshotSizeBytes: number;
             /**
              * Type
              * @default action
@@ -4922,6 +5144,40 @@ export interface components {
             modelEcho?: string | null;
             /** Ok */
             ok: boolean;
+        };
+        /**
+         * LlmCompleteRequest
+         * @description One-shot completion request. Kept deliberately small — this is a proxy
+         *     for lifecycle codegen/enrichment, not a chat surface (that's /agent/chat).
+         */
+        LlmCompleteRequest: {
+            /**
+             * Maxtokens
+             * @default 4096
+             */
+            maxTokens: number;
+            /** Prompt */
+            prompt: string;
+            /** System */
+            system?: string | null;
+            /**
+             * Temperature
+             * @default 0.2
+             */
+            temperature: number;
+        };
+        /** LlmCompleteResponse */
+        LlmCompleteResponse: {
+            /** Content */
+            content: string;
+            /** Costusd */
+            costUsd: number;
+            /** Model */
+            model: string;
+            /** Tokensin */
+            tokensIn: number;
+            /** Tokensout */
+            tokensOut: number;
         };
         /** MatrixCase */
         MatrixCase: {
@@ -5489,6 +5745,15 @@ export interface components {
          * @enum {string}
          */
         Priority: "P0" | "P1" | "P2" | "P3";
+        /** ProjectCandidate */
+        ProjectCandidate: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string;
+        };
         /**
          * ProjectCreate
          * @description Body for ``POST /projects`` (docs/API.md §3.2).
@@ -5908,6 +6173,41 @@ export interface components {
             /** Temporarypassword */
             temporaryPassword: string;
         };
+        /** ResolveProjectBody */
+        ResolveProjectBody: {
+            /**
+             * Projectid
+             * @default
+             */
+            projectId: string;
+            /**
+             * Projectname
+             * @default
+             */
+            projectName: string;
+            /**
+             * Projectslug
+             * @default
+             */
+            projectSlug: string;
+        };
+        /** ResolveProjectResult */
+        ResolveProjectResult: {
+            /** Candidates */
+            candidates?: components["schemas"]["ProjectCandidate"][];
+            /**
+             * Matchedby
+             * @default
+             */
+            matchedBy: string;
+            /**
+             * Projectid
+             * @default
+             */
+            projectId: string;
+            /** Status */
+            status: string;
+        };
         /**
          * Role
          * @enum {string}
@@ -5991,12 +6291,35 @@ export interface components {
              * @default staging
              */
             env: string;
+            /**
+             * Finalize
+             * @default true
+             */
+            finalize: boolean;
             /** Name */
             name: string;
-            /** Projectid */
+            /**
+             * Projectid
+             * @default
+             */
             projectId: string;
+            /**
+             * Projectname
+             * @default
+             */
+            projectName: string;
+            /**
+             * Projectslug
+             * @default
+             */
+            projectSlug: string;
             /** Results */
             results?: components["schemas"]["IngestResult"][];
+            /**
+             * Runid
+             * @default
+             */
+            runId: string;
             /** Suitename */
             suiteName: string;
         };
@@ -6006,6 +6329,11 @@ export interface components {
             failed: number;
             /** Passed */
             passed: number;
+            /**
+             * Projectid
+             * @default
+             */
+            projectId: string;
             /** Runid */
             runId: string;
             /** Status */
@@ -7417,6 +7745,39 @@ export interface operations {
             };
         };
     };
+    callback_aipass_api_v1_aipass_callback_get: {
+        parameters: {
+            query: {
+                state: string;
+                code?: string | null;
+                error?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     analytics_coverage_api_v1_analytics_coverage_get: {
         parameters: {
             query: {
@@ -7488,6 +7849,7 @@ export interface operations {
         parameters: {
             query: {
                 projectId: string;
+                days?: number | null;
                 period?: string;
             };
             header?: {
@@ -8264,6 +8626,41 @@ export interface operations {
             };
         };
     };
+    get_file_raw_api_v1_files_raw_get: {
+        parameters: {
+            query: {
+                /** @description Workspace-scoped object key returned by the upload. */
+                key: string;
+            };
+            header?: {
+                "X-Workspace-Id"?: string | null;
+                "X-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     sign_file_api_v1_files_signed_url_get: {
         parameters: {
             query: {
@@ -8680,6 +9077,42 @@ export interface operations {
             };
         };
     };
+    resolve_project_binding_api_v1_ingest_resolve_project_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-Id"?: string | null;
+                "X-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveProjectBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolveProjectResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_integrations_api_v1_integrations_get: {
         parameters: {
             query?: {
@@ -9064,6 +9497,42 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    llm_complete_api_v1_llm_complete_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-Id"?: string | null;
+                "X-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LlmCompleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LlmCompleteResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -10589,6 +11058,40 @@ export interface operations {
             };
         };
     };
+    get_artifact_raw_api_v1_runs__run_id__artifacts__artifact_id__raw_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-Id"?: string | null;
+            };
+            path: {
+                run_id: string;
+                artifact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     cancel_run_api_v1_runs__run_id__cancel_post: {
         parameters: {
             query?: never;
@@ -11926,6 +12429,165 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    authorize_aipass_api_v1_workspaces__workspaceId__aipass_authorize_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_aipass_connection_api_v1_workspaces__workspaceId__aipass_connection_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiPassConnectionPublic"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activate_aipass_api_v1_workspaces__workspaceId__aipass_connection_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiPassActivateBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiPassConnectionPublic"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disconnect_aipass_api_v1_workspaces__workspaceId__aipass_connection_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiPassDisconnectPublic"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_aipass_models_api_v1_workspaces__workspaceId__aipass_models_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiPassModelsPublic"];
                 };
             };
             /** @description Validation Error */

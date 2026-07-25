@@ -17,11 +17,11 @@ from typing import TYPE_CHECKING
 
 from suitest_agent.graphs._util import parse_json_object
 from suitest_agent.providers.base import ChatMessage, ModelCall
-from suitest_agent.providers.litellm_router import get_provider
 from suitest_db.repositories.agent_sessions import AgentSessionCreate, AgentSessionRepo
 from suitest_shared.domain.enums import AgentSessionKind, MessageRole
 from suitest_shared.schemas.agent_chat import ChatRequest, ChatSseEvent
 
+from suitest_api.services.aipass_oauth_service import build_workspace_llm_provider
 from suitest_api.services.prompt_resolver import resolve_and_pin
 
 if TYPE_CHECKING:
@@ -93,7 +93,13 @@ class AgentChatService:
         messages.extend(ChatMessage(role=m.role, content=m.content) for m in request.messages)
         call = ModelCall(model=model, messages=messages, seed=request.seed, temperature=0.3)
 
-        provider = get_provider(provider_name, api_key=api_key, base_url=base_url)
+        provider = build_workspace_llm_provider(
+            self._session,
+            workspace_id=self._workspace_id,
+            provider=provider_name,
+            api_key=api_key,
+            base_url=base_url,
+        )
         accumulated = ""
         tokens_out = 0
         async for chunk in provider.stream_complete(call):

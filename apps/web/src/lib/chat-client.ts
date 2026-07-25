@@ -104,17 +104,21 @@ export async function streamChat(
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let sep = buffer.indexOf("\n\n");
-    while (sep !== -1) {
-      const frame = buffer.slice(0, sep);
-      buffer = buffer.slice(sep + 2);
-      if (frame.trim().length > 0) dispatchFrame(frame, handlers);
-      sep = buffer.indexOf("\n\n");
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let sep = buffer.indexOf("\n\n");
+      while (sep !== -1) {
+        const frame = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
+        if (frame.trim().length > 0) dispatchFrame(frame, handlers);
+        sep = buffer.indexOf("\n\n");
+      }
     }
+    if (buffer.trim().length > 0) dispatchFrame(buffer, handlers);
+  } finally {
+    reader.releaseLock();
   }
-  if (buffer.trim().length > 0) dispatchFrame(buffer, handlers);
 }

@@ -28,10 +28,11 @@ from suitest_agent.generators.diff_selector import (
     parse_diff,
     select_relevant_cases,
 )
-from suitest_agent.providers.litellm_router import get_provider
 from suitest_core.capabilities import Tier, TierFlag, resolve_tier, tier_in
 from suitest_db.repositories.llm_configs import LLMConfigRepo
 from suitest_db.repositories.test_cases import TestCaseRepo
+
+from suitest_api.services.aipass_oauth_service import build_workspace_llm_provider
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -135,8 +136,10 @@ class DiffSelectionService:
         )
         base_url = base_url_raw if isinstance(base_url_raw, str) else None
 
-        provider = get_provider(
-            active_config.provider,
+        provider = build_workspace_llm_provider(
+            self._session,
+            workspace_id=workspace_id,
+            provider=active_config.provider,
             api_key=active_config.api_key_encrypted,
             base_url=base_url,
         )

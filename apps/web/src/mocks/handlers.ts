@@ -52,6 +52,24 @@ export const handlers: HttpHandler[] = [
     const url = new URL(request.url);
     return HttpResponse.json({ provider: url.searchParams.get("provider") ?? "", models: [] });
   }),
+  http.get(`${BASE}/workspaces/:wsId/aipass/connection`, () =>
+    HttpResponse.json({ configured: false, connected: false, active: false, activeModel: null }),
+  ),
+  http.get(`${BASE}/workspaces/:wsId/aipass/models`, () =>
+    HttpResponse.json({ models: [] }),
+  ),
+  http.put(`${BASE}/workspaces/:wsId/aipass/connection`, async ({ request }) => {
+    const body = (await request.json()) as { model: string };
+    return HttpResponse.json({
+      configured: true,
+      connected: true,
+      active: true,
+      activeModel: body.model,
+    });
+  }),
+  http.delete(`${BASE}/workspaces/:wsId/aipass/connection`, () =>
+    HttpResponse.json({ revoked: true }),
+  ),
 
   // Analytics
   http.get(`${BASE}/analytics/kpis`, () => HttpResponse.json(kpis)),

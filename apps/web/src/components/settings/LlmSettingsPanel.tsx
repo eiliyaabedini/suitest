@@ -2,7 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import {
+  activateAiPassConnection,
   deleteLlmConfig,
+  disconnectAiPassConnection,
+  fetchAiPassConnection,
+  fetchAiPassModels,
   fetchLlmConfig,
   type LlmConfigWriteBody,
   type LlmTestResult,
@@ -49,6 +53,15 @@ export function LlmSettingsPanel({
     queryKey: ["workspace", workspaceId, "llm-config"],
     queryFn: () => fetchLlmConfig(workspaceId),
   });
+  const aiPassQuery = useQuery({
+    queryKey: ["workspace", workspaceId, "aipass", "connection"],
+    queryFn: () => fetchAiPassConnection(workspaceId),
+  });
+  const aiPassModelsQuery = useQuery({
+    queryKey: ["workspace", workspaceId, "aipass", "models"],
+    queryFn: () => fetchAiPassModels(workspaceId),
+    enabled: aiPassQuery.data?.connected === true,
+  });
 
   const [provider, setProvider] = useState("anthropic");
   const [model, setModel] = useState("");
@@ -56,6 +69,8 @@ export function LlmSettingsPanel({
   const [baseUrl, setBaseUrl] = useState("");
   const [testResult, setTestResult] = useState<LlmTestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [aiPassModel, setAiPassModel] = useState("");
+  const [aiPassNotice, setAiPassNotice] = useState<string | null>(null);
 
   const body = (): LlmConfigWriteBody => {
     const next: LlmConfigWriteBody = {
@@ -69,6 +84,10 @@ export function LlmSettingsPanel({
 
   const refresh = (): void => {
     void queryClient.invalidateQueries({ queryKey: ["workspace", workspaceId, "llm-config"] });
+    void queryClient.invalidateQueries({
+      queryKey: ["workspace", workspaceId, "aipass", "connection"],
+    });
+    void queryClient.invalidateQueries({ queryKey: ["workspace", workspaceId, "aipass", "models"] });
     // Tier may have flipped — refetch capabilities so gated UI updates (M3-3).
     void queryClient.invalidateQueries({ queryKey: ["capabilities"] });
   };
@@ -97,10 +116,148 @@ export function LlmSettingsPanel({
     },
   });
 
+  const activateAiPassMutation = useMutation({
+    mutationFn: (selectedModel: string) =>
+      activateAiPassConnection(workspaceId, selectedModel),
+    onSuccess: () => {
+      setAiPassNotice("AI Pass is active for this workspace.");
+      refresh();
+    },
+    onError: () => setAiPassNotice("Could not activate that AI Pass model."),
+  });
+
+  const disconnectAiPassMutation = useMutation({
+    mutationFn: () => disconnectAiPassConnection(workspaceId),
+    onSuccess: ({ revoked }) => {
+      setAiPassNotice(
+        revoked
+          ? "AI Pass disconnected."
+          : "AI Pass disconnected locally. Upstream revocation could not be confirmed.",
+      );
+      setAiPassModel("");
+      refresh();
+    },
+    onError: () => setAiPassNotice("Could not disconnect AI Pass."),
+  });
+
   const active = configQuery.data;
+  const aiPass = aiPassQuery.data;
+  const availableAiPassModels = aiPassModelsQuery.data ?? [];
+  const selectedAiPassModel =
+    aiPassModel || aiPass?.activeModel || availableAiPassModels[0]?.id || "";
 
   return (
     <section className="max-w-xl space-y-5" data-testid="llm-settings-panel">
+      <div className="rounded-lg border border-border bg-bg-elev-1 p-5">
+        <h2 className="text-[15px] font-semibold text-fg-1">AI Pass account</h2>
+        <p className="mt-1 text-[12.5px] text-fg-3">
+          Connect your account to use its shared AI Pass wallet. No API key is entered or exposed
+          in the browser.
+        </p>
+
+        {aiPassQuery.isLoading ? (
+          <p className="mt-4 text-[13px] text-fg-3">Loading…</p>
+        ) : aiPass?.connected ? (
+          <div className="mt-4 space-y-3">
+            <div className="rounded-md border border-accent/30 bg-accent/10 px-3 py-2 text-[13px] text-fg-1">
+              Connected
+              {aiPass.activeModel ? (
+                <span className="ml-2 text-fg-3">
+                  Active model: <span className="font-mono">{aiPass.activeModel}</span>
+                </span>
+              ) : (
+                <span className="ml-2 text-fg-3">Choose a live model to activate AI features.</span>
+              )}
+            </div>
+
+            {canWrite ? (
+              <>
+                <div className="space-y-2">
+                  <label
+                    htmlFor="aipass-model"
+                    className="text-[12.5px] font-medium text-fg-1"
+                  >
+                    AI Pass model
+                  </label>
+                  <select
+                    id="aipass-model"
+                    value={selectedAiPassModel}
+                    onChange={(event) => setAiPassModel(event.target.value)}
+                    disabled={aiPassModelsQuery.isLoading || availableAiPassModels.length === 0}
+                    className="w-full rounded-md border border-border bg-bg-base px-3 py-2 text-[13px] text-fg-1 outline-none focus:border-accent disabled:opacity-60"
+                  >
+                    {availableAiPassModels.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name} ({item.id})
+                      </option>
+                    ))}
+                  </select>
+                  {aiPassModelsQuery.isError ? (
+                    <p className="text-[11.5px] text-red">
+                      Could not load the live AI Pass model catalog.
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAiPassModel(selectedAiPassModel);
+                      activateAiPassMutation.mutate(selectedAiPassModel);
+                    }}
+                    disabled={
+                      activateAiPassMutation.isPending || selectedAiPassModel.length === 0
+                    }
+                    className="inline-flex h-9 items-center justify-center rounded-md bg-accent px-4 text-[13px] font-medium text-accent-fg hover:opacity-90 disabled:opacity-60"
+                  >
+                    {activateAiPassMutation.isPending ? "Activating…" : "Use AI Pass"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => disconnectAiPassMutation.mutate()}
+                    disabled={disconnectAiPassMutation.isPending}
+                    className="inline-flex h-9 items-center justify-center rounded-md border border-red/30 px-4 text-[13px] font-medium text-red hover:bg-red/10 disabled:opacity-60"
+                  >
+                    {disconnectAiPassMutation.isPending ? "Disconnecting…" : "Disconnect"}
+                  </button>
+                </div>
+              </>
+            ) : null}
+          </div>
+        ) : aiPass?.configured ? (
+          canWrite ? (
+            <form
+              method="post"
+              action={`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/aipass/authorize`}
+              className="mt-4"
+            >
+              <button
+                type="submit"
+                className="inline-flex h-9 items-center justify-center rounded-md bg-accent px-4 text-[13px] font-medium text-accent-fg hover:opacity-90"
+              >
+                Connect AI Pass
+              </button>
+            </form>
+          ) : (
+            <p className="mt-4 text-[13px] text-fg-3">
+              An admin can connect an AI Pass account.
+            </p>
+          )
+        ) : (
+          <p className="mt-4 rounded-md border border-amber/30 bg-amber/10 px-3 py-2 text-[12.5px] text-amber">
+            AI Pass connection is unavailable until the deployment administrator configures the
+            public OAuth client.
+          </p>
+        )}
+
+        {aiPassNotice ? (
+          <p className="mt-3 text-[12.5px] text-fg-3" role="status">
+            {aiPassNotice}
+          </p>
+        ) : null}
+      </div>
+
       <div className="rounded-lg border border-border bg-bg-elev-1 p-5">
         <h2 className="text-[15px] font-semibold text-fg-1">LLM provider</h2>
         <p className="mt-1 text-[12.5px] text-fg-3">
@@ -125,7 +282,7 @@ export function LlmSettingsPanel({
                   </span>
                 ) : null}
               </span>
-              {canWrite ? (
+              {canWrite && active.provider !== "aipass" ? (
                 <button
                   type="button"
                   onClick={() => removeMutation.mutate()}

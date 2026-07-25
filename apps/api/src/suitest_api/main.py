@@ -119,6 +119,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     from suitest_api.routers.admin_users import router as admin_users_router
     from suitest_api.routers.agent_chat import router as agent_chat_router
     from suitest_api.routers.agent_plugins import router as agent_plugins_router
+    from suitest_api.routers.aipass_oauth import router as aipass_oauth_router
     from suitest_api.routers.analytics import router as analytics_router
     from suitest_api.routers.api_keys import router as api_keys_router
     from suitest_api.routers.audit_logs import router as audit_logs_router
@@ -232,6 +233,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(audit_logs_router)
     app.include_router(inbox_router)
     app.include_router(mcp_providers_router)
+    app.include_router(aipass_oauth_router)
     app.include_router(llm_config_router)
     app.include_router(autonomy_router)
     app.include_router(cost_router)

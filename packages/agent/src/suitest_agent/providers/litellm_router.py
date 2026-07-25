@@ -30,7 +30,7 @@ from suitest_agent.providers.base import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncIterator, Awaitable, Callable
 
     from suitest_agent.providers.mock import MockProvider
 
@@ -262,6 +262,7 @@ def get_provider(
     base_url: str | None = None,
     workspace_id: str | None = None,
     db_session_factory: _DbSessionFactory | None = None,
+    oauth_access_token_provider: Callable[[bool], Awaitable[str]] | None = None,
 ) -> LLMProvider:
     """Factory: return a :class:`MockProvider` for ``mock``, else LiteLLM-backed.
 
@@ -276,11 +277,21 @@ def get_provider(
         db_session_factory: Async session factory for M7-2 spend queries
             (optional).  When omitted, auto-downgrade is disabled.
     """
-    if provider.strip().lower() == "mock":
+    normalized = provider.strip().lower()
+    if normalized == "mock":
         from suitest_agent.providers.mock import MockProvider
 
         mock: MockProvider = MockProvider()
         return mock
+    if normalized == "aipass":
+        if oauth_access_token_provider is None:
+            raise ProviderError(
+                "AIPASS_NOT_CONNECTED",
+                "AI Pass requires a server-side OAuth connection.",
+            )
+        from suitest_agent.providers.aipass import AiPassProvider
+
+        return AiPassProvider(token_provider=oauth_access_token_provider)
     return LiteLLMProvider(
         provider=provider,
         api_key=api_key,

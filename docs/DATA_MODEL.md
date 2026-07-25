@@ -1084,6 +1084,15 @@ class LLMConfig(Base, TimestampMixin):
     )
 ```
 
+### 4.1a AI Pass OAuth connection
+
+Migration `0047_aipass_oauth` adds two server-only tables:
+
+- `aipass_connections` — one row per workspace. Stores `connected_by_user_id`, a non-reversible issuer+subject hash, token metadata, expiry, refresh generation, and AES-GCM `access_token_encrypted` / `refresh_token_encrypted` values. The active model remains in the existing `llm_configs` row with `provider="aipass"` and a null API-key column.
+- `aipass_oauth_transactions` — short-lived, single-use authorization state. Stores a SHA-256 state digest, user/workspace binding, fixed redirect URI, expiry, and an AES-GCM PKCE verifier. Raw state, authorization codes, and tokens are never columns.
+
+The unique workspace constraint prevents multiple wallet connections. Refresh obtains the row with `SELECT … FOR UPDATE` and commits the rotated access/refresh pair plus generation counter atomically. Both tables cascade with workspace deletion; disconnect deletes the connection explicitly after revocation attempts.
+
 ### 4.2 `workspace_capabilities` — materialized capability snapshot
 
 ```python
@@ -1640,7 +1649,7 @@ Idempotency: `INSERT … ON CONFLICT DO NOTHING` for unique slugs; safe to re-ru
 
 ## 12. Encryption (AES-GCM)
 
-All secrets (`llm_configs.api_key_encrypted`, `mcp_providers.secrets_json_encrypted`, `integrations.secrets_encrypted`) use **AES-256-GCM** with a single workspace-master key.
+All secrets (`llm_configs.api_key_encrypted`, `aipass_connections.access_token_encrypted`, `aipass_connections.refresh_token_encrypted`, `aipass_oauth_transactions.code_verifier_encrypted`, `mcp_providers.secrets_json_encrypted`, `integrations.secrets_encrypted`) use **AES-256-GCM** with a single deployment encryption key.
 
 - Key source: `SUITEST_ENCRYPTION_KEY` env var, base64-encoded 32 bytes (`base64.urlsafe_b64decode`).
 - Generated once at install via `uv run python -m packages.db.crypto keygen` (writes to `.env`).
