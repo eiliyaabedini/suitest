@@ -138,6 +138,27 @@ describe("<AiPanel>", () => {
     expect(signal?.aborted).toBe(true);
   });
 
+  it("aborts an in-flight stream when the panel unmounts", async () => {
+    let signal: AbortSignal | undefined;
+    streamChatMock.mockImplementation(
+      (_messages: unknown, _handlers: unknown, nextSignal?: AbortSignal) =>
+        new Promise<void>((resolve) => {
+          signal = nextSignal;
+          nextSignal?.addEventListener("abort", () => resolve(), { once: true });
+        }),
+    );
+    setCaps(CLOUD_ASSIST_CAPS);
+    const { unmount } = render(<AiPanel />);
+    const user = userEvent.setup();
+
+    await user.type(screen.getByTestId("ai-panel-composer-input"), "Check the last run");
+    await user.click(screen.getByTestId("ai-panel-send"));
+    await screen.findByRole("button", { name: "Stop generating" });
+    unmount();
+
+    expect(signal?.aborted).toBe(true);
+  });
+
   it("renders nothing while capabilities are still loading", () => {
     // beforeEach already sets capabilities=null; do nothing.
     const { container } = render(<AiPanel />);

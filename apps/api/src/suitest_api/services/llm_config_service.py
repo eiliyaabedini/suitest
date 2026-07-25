@@ -206,6 +206,18 @@ class LLMConfigService:
         existing = await self.get_active()
         if existing is None:
             return False
+        await self._clear_existing(existing, commit=commit)
+        return True
+
+    async def clear_config_if_provider(self, provider: str, *, commit: bool = True) -> bool:
+        """Deactivate only a matching active provider while holding its row lock."""
+        existing = await self._llm.get_active_for_update(self._ctx.workspace_id)
+        if existing is None or existing.provider.strip().lower() != provider.strip().lower():
+            return False
+        await self._clear_existing(existing, commit=commit)
+        return True
+
+    async def _clear_existing(self, existing: LLMConfig, *, commit: bool) -> None:
         await self._llm.update(existing.id, LLMConfigUpdate(is_active=False))
         await self._refresh_capability(CoreTier.ZERO)
         await write_audit(
@@ -219,7 +231,6 @@ class LLMConfigService:
         )
         if commit:
             await self._session.commit()
-        return True
 
     async def _refresh_capability(self, tier: CoreTier) -> None:
         """Recompute the materialised ``WorkspaceCapability`` for ``tier`` (M3-3).

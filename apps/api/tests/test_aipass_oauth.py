@@ -16,12 +16,15 @@ from sqlalchemy import select, text
 from suitest_api.services.aipass_oauth_service import (
     AIPASS_DISCOVERY_URL,
     AIPASS_MODELS_URL,
+    AiPassHttpClient,
+    AiPassOAuthError,
     code_challenge_s256,
     parse_models_payload,
 )
 from suitest_api.settings import Settings
 from suitest_db.models.aipass_oauth import AiPassConnection
 from suitest_db.models.llm_config import LLMConfig
+from suitest_db.repositories.llm_configs import LLMConfigRepo
 from suitest_shared.domain.enums import Role
 
 if TYPE_CHECKING:
@@ -64,6 +67,33 @@ def test_models_accept_legacy_string_array_defensively() -> None:
         ("model-one", "model-one"),
         ("model-two", "model-two"),
     ]
+
+
+@pytest.mark.asyncio
+async def test_discovery_rejects_non_default_aipass_origin_port() -> None:
+    def upstream(request: httpx.Request) -> httpx.Response:
+        assert str(request.url) == AIPASS_DISCOVERY_URL
+        return httpx.Response(
+            200,
+            json={
+                "issuer": "https://aipass.one",
+                "authorization_endpoint": "https://aipass.one:444/oauth2/authorize",
+                "token_endpoint": "https://aipass.one/oauth2/token",
+                "userinfo_endpoint": "https://aipass.one/oauth2/userinfo",
+                "revocation_endpoint": "https://aipass.one/oauth2/revoke",
+                "scopes_supported": ["profile:read", "api:access"],
+                "response_types_supported": ["code"],
+                "grant_types_supported": ["authorization_code", "refresh_token"],
+                "code_challenge_methods_supported": ["S256"],
+                "token_endpoint_auth_methods_supported": ["none"],
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(upstream)) as client:
+        with pytest.raises(AiPassOAuthError) as caught:
+            await AiPassHttpClient(client).discovery()
+
+    assert caught.value.code == "AIPASS_DISCOVERY_INVALID"
 
 
 @pytest.mark.asyncio
@@ -163,7 +193,10 @@ async def test_oauth_lifecycle_keeps_rotated_tokens_server_side(api_db: ApiDb) -
             return httpx.Response(200, json={"sub": "test-account-subject"})
         if str(request.url) == AIPASS_MODELS_URL:
             model_request_urls.append(str(request.url))
-            assert request.headers["Authorization"] == f"Bearer {rotated_access}"
+            authorization = request.headers["Authorization"]
+            if authorization == f"Bearer {initial_access}":
+                return httpx.Response(401)
+            assert authorization == f"Bearer {rotated_access}"
             return httpx.Response(
                 200,
                 json={
@@ -275,9 +308,7 @@ async def test_oauth_lifecycle_keeps_rotated_tokens_server_side(api_db: ApiDb) -
                     stored_connection = await session.scalar(
                         select(AiPassConnection).where(AiPassConnection.workspace_id == ws.id)
                     )
-                    assert stored_connection is not None
-                    stored_connection.expires_at = datetime.now(UTC) - timedelta(minutes=1)
-                    await session.commit()
+                assert stored_connection is not None
                 assert isinstance(raw_connection.access_token_encrypted, bytes)
                 assert isinstance(raw_connection.refresh_token_encrypted, bytes)
                 assert initial_access.encode() not in raw_connection.access_token_encrypted
@@ -289,7 +320,7 @@ async def test_oauth_lifecycle_keeps_rotated_tokens_server_side(api_db: ApiDb) -
                 assert models.json() == {
                     "models": [{"id": "catalog-chat-model", "name": "Catalog Chat Model"}]
                 }
-                assert model_request_urls == [AIPASS_MODELS_URL]
+                assert model_request_urls == [AIPASS_MODELS_URL, AIPASS_MODELS_URL]
                 assert token_grants == ["authorization_code", "refresh_token"]
 
                 activate = await client.put(
@@ -386,3 +417,104 @@ async def test_disconnect_erases_tokens_when_revocation_is_unreachable(api_db: A
             select(AiPassConnection).where(AiPassConnection.workspace_id == ws.id)
         )
     assert remaining is None
+
+
+@pytest.mark.asyncio
+async def test_disconnect_does_not_clear_a_provider_switched_during_revocation(
+    api_db: ApiDb,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = await api_db.seed_user(email="aipass-race@example.com")
+    ws = await api_db.seed_workspace(slug="aipass-race", name="AI Pass Race")
+    await api_db.seed_membership(workspace_id=ws.id, user_id=user.id, role=Role.OWNER)
+    active_openai = LLMConfig(
+        workspace_id=ws.id,
+        provider="openai",
+        model="existing-model",
+        api_key_encrypted="existing-provider-key",
+        config_json={},
+        is_active=True,
+    )
+    await api_db.add_all(
+        [
+            AiPassConnection(
+                workspace_id=ws.id,
+                connected_by_user_id=user.id,
+                subject_hash="1" * 64,
+                access_token_encrypted="race-access-token",
+                refresh_token_encrypted="race-refresh-token",
+                token_type="Bearer",
+                scope="api:access profile:read",
+                expires_at=datetime.now(UTC) + timedelta(hours=1),
+            ),
+            active_openai,
+        ]
+    )
+
+    stale_aipass = LLMConfig(
+        id=active_openai.id,
+        workspace_id=ws.id,
+        provider="aipass",
+        model="stale-aipass-model",
+        config_json={},
+        is_active=True,
+    )
+    original_get_active = LLMConfigRepo.get_active
+    reads = 0
+
+    async def racing_get_active(
+        repo: LLMConfigRepo,
+        workspace_id: str,
+    ) -> LLMConfig | None:
+        nonlocal reads
+        reads += 1
+        if reads == 1:
+            return stale_aipass
+        return await original_get_active(repo, workspace_id)
+
+    monkeypatch.setattr(LLMConfigRepo, "get_active", racing_get_active)
+
+    def upstream(request: httpx.Request) -> httpx.Response:
+        if str(request.url) == AIPASS_DISCOVERY_URL:
+            return httpx.Response(
+                200,
+                json={
+                    "issuer": "https://aipass.one",
+                    "authorization_endpoint": "https://aipass.one/oauth2/authorize",
+                    "token_endpoint": "https://aipass.one/oauth2/token",
+                    "userinfo_endpoint": "https://aipass.one/oauth2/userinfo",
+                    "revocation_endpoint": "https://aipass.one/oauth2/revoke",
+                    "scopes_supported": ["profile:read", "api:access"],
+                    "response_types_supported": ["code"],
+                    "grant_types_supported": ["authorization_code", "refresh_token"],
+                    "code_challenge_methods_supported": ["S256"],
+                    "token_endpoint_auth_methods_supported": ["none"],
+                },
+            )
+        if str(request.url) == "https://aipass.one/oauth2/revoke":
+            return httpx.Response(200)
+        raise AssertionError(f"unexpected upstream request: {request.method} {request.url}")
+
+    app = api_db.app_for(user)
+    app.state.settings = Settings(
+        api_url="https://suitest.example",
+        web_url="https://suitest.example",
+        aipass_client_id=SecretStr("test-public-client"),
+    )
+    async with httpx.AsyncClient(transport=httpx.MockTransport(upstream)) as upstream_client:
+        app.state.aipass_http_client = upstream_client
+        async with (
+            LifespanManager(app),
+            httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app),
+                base_url="https://suitest.example",
+            ) as client,
+        ):
+            response = await client.delete(f"/api/v1/workspaces/{ws.id}/aipass/connection")
+
+    assert response.status_code == 200
+    monkeypatch.undo()
+    async with api_db.maker() as session:
+        current = await LLMConfigRepo(session).get_active(ws.id)
+    assert current is not None
+    assert current.provider == "openai"

@@ -1,5 +1,5 @@
 import { Send, Sparkles, Square } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Gated } from "@/components/gating/Gated";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,13 @@ function AiPanelInner(): React.ReactElement {
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+    },
+    [],
+  );
 
   const send = async (): Promise<void> => {
     const text = input.trim();

@@ -157,7 +157,14 @@ def parse_models_payload(payload: object) -> list[AiPassModel]:
 
 def _validate_aipass_endpoint(value: str) -> None:
     parsed = urlsplit(value)
-    if parsed.scheme != "https" or parsed.hostname != "aipass.one":
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise AiPassOAuthError(
+            "AIPASS_DISCOVERY_INVALID",
+            "AI Pass discovery returned an untrusted endpoint.",
+        ) from exc
+    if parsed.scheme != "https" or parsed.hostname != "aipass.one" or port not in {None, 443}:
         raise AiPassOAuthError(
             "AIPASS_DISCOVERY_INVALID",
             "AI Pass discovery returned an untrusted endpoint.",
@@ -216,6 +223,11 @@ class AiPassHttpClient:
                         headers=headers,
                         data=data,
                     ) as response:
+                        if response.status_code == 401:
+                            raise AiPassOAuthError(
+                                "AIPASS_AUTH_FAILED",
+                                "The AI Pass connection is no longer authorized.",
+                            )
                         if response.status_code < 200 or response.status_code >= 300:
                             raise AiPassOAuthError(
                                 "AIPASS_UPSTREAM_ERROR",
@@ -735,11 +747,21 @@ class AiPassOAuthService:
             settings=self._settings,
             http=self._http,
         )
-        try:
-            access_token = await manager.access_token(False)
-        except ProviderError as exc:
-            raise AiPassOAuthError(exc.code, exc.message) from exc
-        return await self._http.models(access_token=access_token)
+        for attempt in range(2):
+            try:
+                access_token = await manager.access_token(force_refresh=attempt == 1)
+            except ProviderError as exc:
+                raise AiPassOAuthError(exc.code, exc.message) from exc
+            try:
+                return await self._http.models(access_token=access_token)
+            except AiPassOAuthError as exc:
+                if attempt == 0 and exc.code == "AIPASS_AUTH_FAILED":
+                    continue
+                raise
+        raise AiPassOAuthError(
+            "AIPASS_AUTH_FAILED",
+            "The AI Pass connection is no longer authorized.",
+        )
 
     async def activate(self, model: str) -> LLMConfig:
         models = await self.models()
@@ -780,9 +802,10 @@ class AiPassOAuthService:
             pass
         resource_id = connection.id
         await self._connections.delete(self._ctx.workspace_id)
-        active = await LLMConfigRepo(self._session).get_active(self._ctx.workspace_id)
-        if active is not None and active.provider.strip().lower() == AIPASS_PROVIDER:
-            await LLMConfigService(self._session, self._ctx).clear_config(commit=False)
+        await LLMConfigService(self._session, self._ctx).clear_config_if_provider(
+            AIPASS_PROVIDER,
+            commit=False,
+        )
         await write_audit(
             self._session,
             workspace_id=self._ctx.workspace_id,
