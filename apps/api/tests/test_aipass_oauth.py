@@ -40,33 +40,73 @@ def test_pkce_challenge_is_s256_without_padding() -> None:
     assert "=" not in code_challenge_s256(verifier)
 
 
-def test_models_accept_openai_list_and_keep_chat_capable_entries() -> None:
+def test_models_use_current_endpoint_and_preserve_opaque_ids() -> None:
+    assert AIPASS_MODELS_URL == (
+        "https://aipass.one/oauth2/v1/models?type=text&method=chat_completions"
+    )
+
     models = parse_models_payload(
         {
             "object": "list",
             "data": [
                 {
-                    "id": "live-chat-model",
+                    "id": "openai/live-chat-model",
+                    "object": "model",
+                    "created": 1_753_465_600,
+                    "owned_by": "openai",
                     "name": "Live Chat Model",
                     "methods": ["chat_completions"],
+                    "future_additive_field": {"supported": True},
                 },
                 {
-                    "id": "live-image-model",
+                    "id": "provider/live-image-model",
+                    "object": "model",
+                    "created": 1_753_465_601,
+                    "owned_by": "provider",
                     "name": "Live Image Model",
                     "methods": ["images_generations"],
                 },
             ],
         }
     )
-    assert [model.id for model in models] == ["live-chat-model"]
-
-
-def test_models_accept_legacy_string_array_defensively() -> None:
-    models = parse_models_payload(["model-one", "model-two", "", 42])
     assert [(model.id, model.name) for model in models] == [
-        ("model-one", "model-one"),
-        ("model-two", "model-two"),
+        ("openai/live-chat-model", "Live Chat Model"),
+        ("provider/live-image-model", "Live Image Model"),
     ]
+
+
+def test_models_accept_legacy_array_for_migration() -> None:
+    models = parse_models_payload(["provider/model-one", "provider/model-two"])
+    assert [(model.id, model.name) for model in models] == [
+        ("provider/model-one", "provider/model-one"),
+        ("provider/model-two", "provider/model-two"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"object": "list", "data": [{"id": "missing-standard-fields"}]},
+        {
+            "object": "list",
+            "data": [
+                {
+                    "id": "wrong-object",
+                    "object": "not-a-model",
+                    "created": 1_753_465_600,
+                    "owned_by": "provider",
+                }
+            ],
+        },
+        ["valid-model", 42],
+        [{"id": "legacy-object-model"}],
+    ],
+)
+def test_models_reject_malformed_payloads(payload: object) -> None:
+    with pytest.raises(AiPassOAuthError) as caught:
+        parse_models_payload(payload)
+
+    assert caught.value.code == "AIPASS_INVALID_MODELS"
 
 
 @pytest.mark.asyncio
@@ -203,15 +243,14 @@ async def test_oauth_lifecycle_keeps_rotated_tokens_server_side(api_db: ApiDb) -
                     "object": "list",
                     "data": [
                         {
-                            "id": "catalog-chat-model",
+                            "id": "openai/catalog-chat-model",
+                            "object": "model",
+                            "created": 1_753_465_600,
+                            "owned_by": "openai",
                             "name": "Catalog Chat Model",
                             "methods": ["chat_completions"],
-                        },
-                        {
-                            "id": "catalog-image-model",
-                            "name": "Catalog Image Model",
-                            "methods": ["images_generations"],
-                        },
+                            "type": "text",
+                        }
                     ],
                 },
             )
@@ -318,17 +357,22 @@ async def test_oauth_lifecycle_keeps_rotated_tokens_server_side(api_db: ApiDb) -
                 models = await client.get(f"/api/v1/workspaces/{ws.id}/aipass/models")
                 assert models.status_code == 200, models.text
                 assert models.json() == {
-                    "models": [{"id": "catalog-chat-model", "name": "Catalog Chat Model"}]
+                    "models": [
+                        {
+                            "id": "openai/catalog-chat-model",
+                            "name": "Catalog Chat Model",
+                        }
+                    ]
                 }
                 assert model_request_urls == [AIPASS_MODELS_URL, AIPASS_MODELS_URL]
                 assert token_grants == ["authorization_code", "refresh_token"]
 
                 activate = await client.put(
                     f"/api/v1/workspaces/{ws.id}/aipass/connection",
-                    json={"model": "catalog-chat-model"},
+                    json={"model": "openai/catalog-chat-model"},
                 )
                 assert activate.status_code == 200, activate.text
-                assert activate.json()["activeModel"] == "catalog-chat-model"
+                assert activate.json()["activeModel"] == "openai/catalog-chat-model"
 
                 async with api_db.maker() as session:
                     rotated = await session.scalar(

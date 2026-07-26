@@ -40,7 +40,7 @@ from suitest_api.settings import Settings, get_settings
 
 AIPASS_ISSUER = "https://aipass.one"
 AIPASS_DISCOVERY_URL = f"{AIPASS_ISSUER}/.well-known/oauth-authorization-server"
-AIPASS_MODELS_URL = f"{AIPASS_ISSUER}/oauth2/v1/models?detailed=true"
+AIPASS_MODELS_URL = f"{AIPASS_ISSUER}/oauth2/v1/models?type=text&method=chat_completions"
 AIPASS_PROVIDER = "aipass"
 
 _SCOPES = ("api:access", "profile:read")
@@ -109,6 +109,7 @@ def parse_models_payload(payload: object) -> list[AiPassModel]:
     """Normalize OpenAI ``{object:"list",data:[...]}`` and legacy arrays."""
     root = _object_dict(payload)
     raw_items: list[object]
+    openai_envelope = root is not None
     if root is not None:
         data = root.get("data")
         if root.get("object") != "list" or not isinstance(data, list):
@@ -125,29 +126,68 @@ def parse_models_payload(payload: object) -> list[AiPassModel]:
             "AI Pass returned an invalid model catalog.",
         )
 
+    if len(raw_items) > _MAX_MODELS:
+        raise AiPassOAuthError(
+            "AIPASS_INVALID_MODELS",
+            "AI Pass returned an invalid model catalog.",
+        )
+
     models: list[AiPassModel] = []
     seen: set[str] = set()
-    for item in raw_items[:_MAX_MODELS]:
+    for item in raw_items:
         if isinstance(item, str):
-            model_id = item.strip()
+            if openai_envelope:
+                raise AiPassOAuthError(
+                    "AIPASS_INVALID_MODELS",
+                    "AI Pass returned an invalid model catalog.",
+                )
+            model_id = item
             name = model_id
+        elif not openai_envelope:
+            raise AiPassOAuthError(
+                "AIPASS_INVALID_MODELS",
+                "AI Pass returned an invalid model catalog.",
+            )
         else:
             model = _object_dict(item)
             if model is None:
-                continue
+                raise AiPassOAuthError(
+                    "AIPASS_INVALID_MODELS",
+                    "AI Pass returned an invalid model catalog.",
+                )
             raw_id = model.get("id")
             if not isinstance(raw_id, str):
-                continue
-            model_id = raw_id.strip()
+                raise AiPassOAuthError(
+                    "AIPASS_INVALID_MODELS",
+                    "AI Pass returned an invalid model catalog.",
+                )
+            if openai_envelope:
+                created = model.get("created")
+                owned_by = model.get("owned_by")
+                if (
+                    model.get("object") != "model"
+                    or not isinstance(created, int)
+                    or isinstance(created, bool)
+                    or created < 0
+                    or not isinstance(owned_by, str)
+                    or not owned_by
+                ):
+                    raise AiPassOAuthError(
+                        "AIPASS_INVALID_MODELS",
+                        "AI Pass returned an invalid model catalog.",
+                    )
+            model_id = raw_id
             raw_name = model.get("name")
-            name = raw_name.strip() if isinstance(raw_name, str) else model_id
-            methods = model.get("methods")
-            if isinstance(methods, list):
-                method_names = {method for method in methods if isinstance(method, str)}
-                if method_names and "chat_completions" not in method_names:
-                    continue
-        if not model_id or len(model_id) > 200 or not name or len(name) > 300:
-            continue
+            name = (
+                raw_name
+                if isinstance(raw_name, str) and raw_name and len(raw_name) <= 300
+                else model_id
+            )
+        if not model_id or not model_id.strip() or len(model_id) > 200:
+            raise AiPassOAuthError(
+                "AIPASS_INVALID_MODELS",
+                "AI Pass returned an invalid model catalog.",
+            )
         if model_id in seen:
             continue
         seen.add(model_id)
