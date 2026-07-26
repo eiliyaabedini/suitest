@@ -687,7 +687,7 @@ AI Pass is an optional OAuth account connection alongside the existing provider 
 
 `GET /connection` returns `{configured, connected, active, activeModel}`. `GET /models` returns `{models:[{id,name}]}` and accepts both the OpenAI list envelope and legacy string-array upstream formats. Models are never hard-coded. OAuth codes and bearer credentials are absent from every response schema; callback success/failure is a bounded status code redirected to Settings.
 
-The public client uses Authorization Code + PKCE S256 and no client secret. The fixed callback is `${SUITEST_API_URL}/api/v1/aipass/callback`; deployments must use HTTPS outside localhost and have that exact URI registered for the protected first-party client ID.
+The public client uses Authorization Code + PKCE S256 and no client secret. The client ID identifies the integration; it is not a provider API key. The fixed callback is `${SUITEST_API_URL}/api/v1/aipass/callback`; deployments must use HTTPS outside localhost and have that exact URI registered for the configured client ID.
 
 ### 3.15 Autonomy
 

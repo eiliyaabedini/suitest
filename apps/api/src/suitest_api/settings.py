@@ -31,9 +31,9 @@ class Settings(BaseSettings):
     database_url: str = Field(default="postgresql+asyncpg://suitest:suitest@localhost:5432/suitest")
     oauth_google_client_id: str = Field(default="")
     oauth_google_client_secret: str = Field(default="")
-    # First-party AI Pass OAuth public client id. It is injected from protected
-    # runtime configuration and intentionally uses SecretStr so settings repr /
-    # validation errors never print the value. There is no client secret.
+    # Public AI Pass OAuth client id, not an API key or client secret. It still
+    # uses SecretStr so environment-specific attribution is not printed through
+    # settings repr / validation errors.
     aipass_client_id: SecretStr = Field(default_factory=lambda: SecretStr(""))
     superadmin_email: str = Field(default="")
     superadmin_password: str = Field(default="", repr=False)
