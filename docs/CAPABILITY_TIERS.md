@@ -12,14 +12,14 @@ Suitest must work in three "operating modes":
 
 1. **Self-host air-gapped, no LLM.** Enterprise / regulated-industry QA teams that are not allowed to egress to the cloud. Suitest must still be 100% useful as a TCM + deterministic runner.
 2. **Self-host with local LLM.** Teams with on-prem GPUs (Ollama / vLLM / llama.cpp). Privacy preserved, AI features active.
-3. **Self-host + cloud LLM (BYO).** Teams with a SaaS API budget — bring your own key (Anthropic / OpenAI / Gemini / etc.). Full features.
+3. **Self-host + cloud LLM.** Teams with a SaaS API budget — bring a provider key (Anthropic / OpenAI / Gemini / etc.) or optionally connect an AI Pass account. Full features.
 
 Hence the tiers are **not** pricing tiers, but a **capability matrix** determined by the per-workspace LLM configuration (web UI). Same binary, different surface area.
 
 Principles:
 
 - **Default = ZERO.** First boot works without any configuration — the base deployment is always ZERO.
-- **Upgrade = set a provider in the web UI.** Switching tier = pick a provider in Settings → LLM (test-connected, stored AES-encrypted in the DB) — takes effect immediately per-workspace, **without restart**, no rebuild, no env.
+- **Upgrade = configure access in the web UI.** Pick an existing provider in Settings → LLM, or use the separate Connect AI Pass account card when the deployment enables it. Changes take effect immediately per-workspace, **without restart**.
 - **No silent degradation.** If a feature is not available in the current tier, the endpoint returns `503 LLM_DISABLED` with a reason — the UI gates it with a tooltip.
 - **Embeddings independent from the LLM.** The embedder runtime (`packages/core/embeddings.py`) is resolved separately; base capability embeddings = disabled until there is a workspace embeddings config.
 
@@ -29,7 +29,7 @@ Principles:
 
 | Aspect | ZERO | LOCAL | CLOUD |
 |-------|------|-------|-------|
-| Trigger (workspace LLM provider, web UI) | `none` / not set | `ollama` / `llamacpp` / `vllm` / `lmstudio` | `anthropic` / `openai` / `gemini` / `groq` / `openrouter` / `azure` / `bedrock` / `vertex` / `deepseek` / `mock` (test/dev only — see §3) |
+| Trigger (workspace LLM provider, web UI) | `none` / not set | `ollama` / `llamacpp` / `vllm` / `lmstudio` | `anthropic` / `openai` / `gemini` / `groq` / `openrouter` / `azure` / `bedrock` / `vertex` / `deepseek` / `aipass` (connected account) / `mock` (test/dev only — see §3) |
 | Manual TCM (CRUD case/suite) | ✓ | ✓ | ✓ |
 | Deterministic runner (`step.code`) | ✓ | ✓ | ✓ |
 | MCP plugins | ✓ | ✓ | ✓ |
@@ -52,7 +52,7 @@ Principles:
 
 ## 3. Tier resolution
 
-> **The tier is resolved from the per-workspace LLM configuration (web UI), NOT from env.** There is no more `SUITEST_LLM_PROVIDER` / `SUITEST_LLM_API_KEY` / `SUITEST_LLM_MODEL` / `SUITEST_LLM_BASE_URL` / `SUITEST_EMBEDDINGS_BACKEND`. The provider is set in Settings → LLM provider, stored AES-encrypted in the DB (`LLMConfig`), and test-connected before save.
+> **The tier is resolved from the per-workspace LLM configuration (web UI), NOT from env.** There is no `SUITEST_LLM_PROVIDER` / `SUITEST_LLM_API_KEY` / `SUITEST_LLM_MODEL` / `SUITEST_LLM_BASE_URL` / `SUITEST_EMBEDDINGS_BACKEND` tier dial. Existing providers are set in Settings → LLM. AI Pass is activated only after an OAuth account connection and live-model check. `SUITEST_AIPASS_CLIENT_ID` enables that optional public-client flow but does not itself change a workspace tier.
 
 Two layers:
 
@@ -68,7 +68,7 @@ def _provider_to_tier(provider: str) -> Tier:
         return Tier.ZERO
     if p in LOCAL_PROVIDERS:
         return Tier.LOCAL
-    return Tier.CLOUD        # anthropic/openai/gemini/groq/openrouter/azure/bedrock/vertex/deepseek/mock
+    return Tier.CLOUD        # cloud providers, connected aipass, or mock
 ```
 
 Validation (key required for non-IAM CLOUD, `base_url` required for LOCAL) happens at **save** time in `apps/api/.../services/llm_config_service.py` (`LLMConfigError`), not at resolve time — DB config is considered trusted. When a config is saved, `_refresh_capability` materializes `WorkspaceCapability`. Effective-tier flags are computed by the pure primitives `compute_features(tier, embeddings)` + `compute_autonomy(tier)` (still in `packages/core/capabilities.py`). Because the overlay reads the DB on every request, switching provider takes effect immediately — **without restart**.
@@ -353,13 +353,21 @@ The frontend uses this response to render `<Gated feature="ai_generation">…</G
 
 ## 11. Upgrading tier at runtime
 
-One path: **Settings → LLM page (per-workspace, DB-stored)**. There is no env path anymore.
+One page: **Settings → LLM (per-workspace, DB-stored)**. Deployment configuration can enable the optional AI Pass public client, but it does not select a workspace provider or tier.
 
 1. An admin user opens Settings → LLM (`apps/web/.../components/settings/LlmSettingsPanel.tsx`).
 2. Picks a provider, enters model + API key (write-only field) / base_url (for LOCAL).
 3. Clicks "Test connection" → `POST /workspaces/{id}/llm-config/test` (LiteLLM check-connect) before save is allowed.
 4. Save → `PUT /workspaces/{id}/llm-config` → `LLMConfig` row (api_key AES-GCM-encrypted with `SUITEST_ENCRYPTION_KEY`); `llm_config_service._refresh_capability` materializes `WorkspaceCapability`.
 5. The effective tier takes effect immediately: `GET /capabilities` (the overlay reads the DB on every request) reflects the new tier **without restart**; existing action-only test cases become `executable=true`.
+
+AI Pass follows a parallel account path on the same page:
+
+1. An admin clicks **Connect AI Pass**; there is no API-key field.
+2. The API creates user/workspace-bound hashed state and an encrypted PKCE verifier, then redirects to AI Pass using S256.
+3. The fixed server callback exchanges the code; access and refresh tokens stay in AES-GCM server-side storage.
+4. Suitest fetches the authenticated live model catalog. The admin selects one of those returned models; activation writes the normal `LLMConfig(provider="aipass")` overlay.
+5. Disconnect attempts upstream revocation, always erases local tokens, and returns the workspace to ZERO if AI Pass was active.
 
 Precedence: workspace `LLMConfig` > `WorkspaceCapability` > ZERO base. Audit log entry recorded.
 

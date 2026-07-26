@@ -165,6 +165,57 @@ SUITEST_SUPERADMIN_WORKSPACE_NAME=Default Workspace
 There is no LLM env dial: the tier is upgraded per workspace from the web UI
 (Settings → LLM), and the key is stored AES-GCM encrypted in the database.
 
+### 1.4.1 Optional AI Pass account connection
+
+AI Pass is disabled by default, ZERO remains fully functional, and every
+existing provider remains available. Users who choose it install Suitest and
+click **Connect AI Pass** without obtaining or pasting model API keys; requests
+spend from their own shared AI Pass wallet.
+
+For evaluation only, our fork/private test deployment may inject an
+AI Pass-owned public evaluation client ID from protected CI/build configuration,
+but only when its exact callback is registered for that client. It is not an
+API key or client secret, is never committed or printed, and this shortcut is
+not upstream release guidance.
+
+To replace the evaluation client with your own:
+
+1. Register **Suitest** at the
+   [AI Pass Developer Dashboard](https://aipass.one/panel/developer).
+2. Register `${SUITEST_API_URL}/api/v1/aipass/callback` exactly. For the
+   documented local stack this is
+   `http://localhost:4000/api/v1/aipass/callback`; production uses the exact
+   HTTPS API origin.
+3. Set `SUITEST_AIPASS_CLIENT_ID` to your own public client ID through protected
+   deployment configuration.
+
+Keep the client ID out of image layers, Compose YAML, Helm values, logs,
+support output, and committed files. Keep `SUITEST_ENCRYPTION_KEY` stable and
+protected; OAuth access/refresh tokens and PKCE verifiers use the same AES-GCM
+server-side storage as other Suitest secrets. Allow API and runner HTTPS egress
+to `aipass.one`. If the shipped default-deny NetworkPolicy is enabled, add the
+required egress CIDRs to `networkPolicy.egressCidrs` or enforce an equivalent
+FQDN policy with the cluster CNI. Without a configured client or exact callback
+registration, authorization fails closed.
+
+Compose reads `SUITEST_AIPASS_CLIENT_ID` from the runtime environment. The Helm chart never accepts the value inline; reference an operator-managed Secret:
+
+```yaml
+aipass:
+  existingSecretName: suitest-aipass
+  clientIdSecretKey: SUITEST_AIPASS_CLIENT_ID
+```
+
+The account authorization and token exchange follow AI Pass discovery metadata.
+Using your own OAuth client attributes eligible paid usage to Suitest's
+integration and may earn developer revenue share under the
+[AI Pass Terms of Service](https://aipass.one/terms-of-service). Usage covered
+by free credits, trials, promotions, grants, bonuses, or unpaid/free-user
+balances is excluded; dashboard or separate revenue-share rules govern
+eligibility, amounts, timing, methods, and thresholds.
+Disconnect attempts revocation and erases the local encrypted credentials even
+if revocation cannot be confirmed.
+
 ### 1.5 Reverse proxy & TLS
 
 Production compose: add `traefik` or `caddy` in front as the TLS terminator. Example with Caddy:

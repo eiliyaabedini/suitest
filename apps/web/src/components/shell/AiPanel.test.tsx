@@ -1,9 +1,16 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { act } from "react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AiPanel } from "@/components/shell/AiPanel";
 import { useCapabilities, type Capabilities } from "@/stores/use-capabilities";
+
+const streamChatMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/chat-client", () => ({
+  streamChat: streamChatMock,
+}));
 
 const ZERO_CAPS: Capabilities = {
   tier: "ZERO",
@@ -66,6 +73,8 @@ function setCaps(caps: Capabilities): void {
 
 describe("<AiPanel>", () => {
   beforeEach(() => {
+    streamChatMock.mockReset();
+    streamChatMock.mockResolvedValue(undefined);
     act(() => {
       useCapabilities.setState({ capabilities: null, loading: true, error: null });
     });
@@ -107,6 +116,47 @@ describe("<AiPanel>", () => {
     expect(input).toHaveAttribute("placeholder", "Ask the agent…");
     // Send is disabled until the user types something.
     expect(screen.getByTestId("ai-panel-send")).toBeDisabled();
+  });
+
+  it("stops an in-flight stream by aborting its transport", async () => {
+    let signal: AbortSignal | undefined;
+    streamChatMock.mockImplementation(
+      (_messages: unknown, _handlers: unknown, nextSignal?: AbortSignal) =>
+        new Promise<void>((resolve) => {
+          signal = nextSignal;
+          nextSignal?.addEventListener("abort", () => resolve(), { once: true });
+        }),
+    );
+    setCaps(CLOUD_ASSIST_CAPS);
+    render(<AiPanel />);
+    const user = userEvent.setup();
+
+    await user.type(screen.getByTestId("ai-panel-composer-input"), "Check the last run");
+    await user.click(screen.getByTestId("ai-panel-send"));
+    await user.click(await screen.findByRole("button", { name: "Stop generating" }));
+
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it("aborts an in-flight stream when the panel unmounts", async () => {
+    let signal: AbortSignal | undefined;
+    streamChatMock.mockImplementation(
+      (_messages: unknown, _handlers: unknown, nextSignal?: AbortSignal) =>
+        new Promise<void>((resolve) => {
+          signal = nextSignal;
+          nextSignal?.addEventListener("abort", () => resolve(), { once: true });
+        }),
+    );
+    setCaps(CLOUD_ASSIST_CAPS);
+    const { unmount } = render(<AiPanel />);
+    const user = userEvent.setup();
+
+    await user.type(screen.getByTestId("ai-panel-composer-input"), "Check the last run");
+    await user.click(screen.getByTestId("ai-panel-send"));
+    await screen.findByRole("button", { name: "Stop generating" });
+    unmount();
+
+    expect(signal?.aborted).toBe(true);
   });
 
   it("renders nothing while capabilities are still loading", () => {

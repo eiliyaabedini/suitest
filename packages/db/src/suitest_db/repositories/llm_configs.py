@@ -40,3 +40,14 @@ class LLMConfigRepo(AsyncRepository[LLMConfig, LLMConfigCreate, LLMConfigUpdate]
         )
         result: LLMConfig | None = await self.session.scalar(stmt)
         return result
+
+    async def get_active_for_update(self, workspace_id: str) -> LLMConfig | None:
+        stmt = (
+            select(LLMConfig)
+            .where(LLMConfig.workspace_id == workspace_id, LLMConfig.is_active.is_(True))
+            .order_by(LLMConfig.created_at.desc(), LLMConfig.id.desc())
+            .limit(1)
+            .with_for_update()
+        )
+        result: LLMConfig | None = await self.session.scalar(stmt)
+        return result

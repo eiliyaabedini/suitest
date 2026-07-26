@@ -31,6 +31,14 @@ spec:
                 name: {{ include "suitest.fullname" . }}-config
             - secretRef:
                 name: {{ include "suitest.fullname" . }}-secret
+          {{- if .Values.aipass.existingSecretName }}
+          env:
+            - name: SUITEST_AIPASS_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.aipass.existingSecretName | quote }}
+                  key: {{ .Values.aipass.clientIdSecretKey | quote }}
+          {{- end }}
           # ARQ worker has no HTTP port; liveness via a process check.
           livenessProbe:
             exec:

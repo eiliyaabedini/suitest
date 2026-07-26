@@ -1,5 +1,5 @@
-import { Send, Sparkles } from "lucide-react";
-import { useRef, useState } from "react";
+import { Send, Sparkles, Square } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { Gated } from "@/components/gating/Gated";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,13 @@ function AiPanelInner(): React.ReactElement {
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+    },
+    [],
+  );
 
   const send = async (): Promise<void> => {
     const text = input.trim();
@@ -90,8 +97,10 @@ function AiPanelInner(): React.ReactElement {
         },
         controller.signal,
       );
-    } catch {
-      setError("The chat stream was interrupted.");
+    } catch (caught) {
+      if (!(caught instanceof DOMException && caught.name === "AbortError")) {
+        setError("The chat stream was interrupted.");
+      }
     } finally {
       setStreaming(false);
       abortRef.current = null;
@@ -181,18 +190,32 @@ function AiPanelInner(): React.ReactElement {
             className="flex-1 resize-none rounded-md border border-border bg-bg-elev-2 px-2 py-1.5 text-[12.5px] text-fg-1 placeholder:text-fg-5 outline-none focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
             data-testid="ai-panel-composer-input"
           />
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="outline"
-            disabled={streaming || input.trim().length === 0}
-            aria-label="Send"
-            onClick={() => void send()}
-            className="border-border bg-bg-elev-2 text-fg-1"
-            data-testid="ai-panel-send"
-          >
-            <Send className="h-3.5 w-3.5" aria-hidden="true" />
-          </Button>
+          {streaming ? (
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="outline"
+              aria-label="Stop generating"
+              onClick={() => abortRef.current?.abort()}
+              className="border-border bg-bg-elev-2 text-fg-1"
+              data-testid="ai-panel-stop"
+            >
+              <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="outline"
+              disabled={input.trim().length === 0}
+              aria-label="Send"
+              onClick={() => void send()}
+              className="border-border bg-bg-elev-2 text-fg-1"
+              data-testid="ai-panel-send"
+            >
+              <Send className="h-3.5 w-3.5" aria-hidden="true" />
+            </Button>
+          )}
         </div>
       </div>
     </aside>

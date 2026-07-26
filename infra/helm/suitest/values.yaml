@@ -20,6 +20,12 @@ llm:
     name: ""
     key: api-key
 
+# Optional AI Pass public OAuth client ID (not an API key/client secret), loaded
+# from an operator-managed Secret to keep deployment attribution out of output.
+aipass:
+  existingSecretName: ""
+  clientIdSecretKey: SUITEST_AIPASS_CLIENT_ID
+
 api:
   replicaCount: 2
   service:

@@ -17,6 +17,18 @@ function renderPanel(canWrite = true) {
 }
 
 describe("LlmSettingsPanel", () => {
+  it("offers AI Pass as an account connection, never as an API-key provider", async () => {
+    server.use(
+      http.get("*/api/v1/workspaces/ws_1/aipass/connection", () =>
+        HttpResponse.json({ configured: true, connected: false, active: false }),
+      ),
+    );
+    renderPanel();
+    expect(await screen.findByRole("button", { name: "Connect AI Pass" })).toBeInTheDocument();
+    expect(screen.getByText(/shared AI Pass wallet/i)).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /aipass/i })).not.toBeInTheDocument();
+  });
+
   it("shows ZERO-tier empty state when no config is set", async () => {
     renderPanel();
     expect(await screen.findByTestId("llm-none")).toBeInTheDocument();

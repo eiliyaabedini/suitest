@@ -17,6 +17,9 @@ import { useActiveWorkspace } from "@/stores/use-active-workspace";
 interface SettingsSearch {
   /** Set by the `_app` must_change_password guard to force the Account tab. */
   force_password?: string;
+  tab?: "llm";
+  aipass?: "connected";
+  aipass_error?: string;
 }
 
 /** Roles allowed to see the Members tab (OWNER + ADMIN). */
@@ -54,7 +57,27 @@ function SettingsScreen(): React.ReactElement {
         </div>
       ) : null}
 
-      <Tabs defaultValue="account">
+      {search.aipass === "connected" ? (
+        <div
+          role="status"
+          className="rounded-md border border-accent/30 bg-accent/10 px-4 py-3 text-[13px] text-accent"
+        >
+          AI Pass connected. Choose a live model to activate it for this workspace.
+        </div>
+      ) : null}
+
+      {search.aipass_error ? (
+        <div
+          role="alert"
+          className="rounded-md border border-red/30 bg-red/10 px-4 py-3 text-[13px] text-red"
+        >
+          {search.aipass_error === "AIPASS_ACCESS_DENIED"
+            ? "AI Pass connection was canceled."
+            : "AI Pass could not be connected. Please try again or contact your deployment administrator."}
+        </div>
+      ) : null}
+
+      <Tabs defaultValue={forcePassword ? "account" : (search.tab ?? "account")}>
         <TabsList>
           <TabsTrigger value="account">Account</TabsTrigger>
           {showMembers ? <TabsTrigger value="members">Members</TabsTrigger> : null}
@@ -235,7 +258,17 @@ function AccountTab(): React.ReactElement {
 export const Route = createFileRoute("/_app/settings")({
   validateSearch: (search: Record<string, unknown>): SettingsSearch => {
     const force = search["force_password"];
-    return typeof force === "string" ? { force_password: force } : {};
+    const tab = search["tab"];
+    const aipass = search["aipass"];
+    const aipassError = search["aipass_error"];
+    return {
+      ...(typeof force === "string" ? { force_password: force } : {}),
+      ...(tab === "llm" ? { tab } : {}),
+      ...(aipass === "connected" ? { aipass } : {}),
+      ...(typeof aipassError === "string" && aipassError.length <= 128
+        ? { aipass_error: aipassError }
+        : {}),
+    };
   },
   component: SettingsScreen,
 });

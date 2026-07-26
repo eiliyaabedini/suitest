@@ -36,6 +36,8 @@ export interface ChatStreamHandlers {
 
 const isTestEnv = typeof process !== "undefined" && process.env["NODE_ENV"] === "test";
 const SSE_BASE = isTestEnv ? "http://localhost/api/v1" : "/api/v1";
+const MAX_CHAT_STREAM_BYTES = 8 * 1024 * 1024;
+const MAX_CHAT_STREAM_FRAME_CHARS = 1024 * 1024;
 
 function streamHeaders(): HeadersInit {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -104,17 +106,45 @@ export async function streamChat(
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let sep = buffer.indexOf("\n\n");
-    while (sep !== -1) {
-      const frame = buffer.slice(0, sep);
-      buffer = buffer.slice(sep + 2);
-      if (frame.trim().length > 0) dispatchFrame(frame, handlers);
-      sep = buffer.indexOf("\n\n");
+  let receivedBytes = 0;
+  let completed = false;
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      receivedBytes += value.byteLength;
+      if (receivedBytes > MAX_CHAT_STREAM_BYTES) {
+        throw new Error("Chat stream exceeded the response size limit.");
+      }
+      buffer += decoder.decode(value, { stream: true });
+      let sep = buffer.indexOf("\n\n");
+      while (sep !== -1) {
+        if (sep > MAX_CHAT_STREAM_FRAME_CHARS) {
+          throw new Error("Chat stream frame exceeded the size limit.");
+        }
+        const frame = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
+        if (frame.trim().length > 0) dispatchFrame(frame, handlers);
+        sep = buffer.indexOf("\n\n");
+      }
+      if (buffer.length > MAX_CHAT_STREAM_FRAME_CHARS) {
+        throw new Error("Chat stream frame exceeded the size limit.");
+      }
     }
+    buffer += decoder.decode();
+    if (buffer.length > MAX_CHAT_STREAM_FRAME_CHARS) {
+      throw new Error("Chat stream frame exceeded the size limit.");
+    }
+    if (buffer.trim().length > 0) dispatchFrame(buffer, handlers);
+    completed = true;
+  } finally {
+    if (!completed) {
+      try {
+        await reader.cancel();
+      } catch {
+        // The original stream failure is more useful than a cancellation error.
+      }
+    }
+    reader.releaseLock();
   }
-  if (buffer.trim().length > 0) dispatchFrame(buffer, handlers);
 }

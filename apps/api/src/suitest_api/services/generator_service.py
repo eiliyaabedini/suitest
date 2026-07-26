@@ -30,7 +30,6 @@ from suitest_agent.generators.openapi_generator import OpenApiGenerator, OpenApi
 from suitest_agent.generators.prd import PrdGenerator
 from suitest_agent.generators.url_crawler import UrlCrawler
 from suitest_agent.generators.url_semantic import UrlSemanticGenerator
-from suitest_agent.providers.litellm_router import get_provider
 from suitest_db.audit import write_audit
 from suitest_db.models.case import CaseTag, TestCase, TestStep
 from suitest_db.models.generator_run import GeneratorRun
@@ -48,6 +47,7 @@ from suitest_shared.schemas.generator_input import (
 )
 from suitest_shared.text import derive_slug, derive_title
 
+from suitest_api.services.aipass_oauth_service import build_workspace_llm_provider
 from suitest_api.services.prompt_resolver import resolve_and_pin
 
 if TYPE_CHECKING:
@@ -275,7 +275,13 @@ class GeneratorService:
             )
         )
 
-        provider = get_provider(llm_provider, api_key=llm_api_key, base_url=llm_base_url)
+        provider = build_workspace_llm_provider(
+            self._session,
+            workspace_id=workspace_id,
+            provider=llm_provider,
+            api_key=llm_api_key,
+            base_url=llm_base_url,
+        )
         enricher = OpenApiEnricher(provider, model=llm_model, prompt_override=prompt_content)
         result = await enricher.enrich(generator.op_summaries())
 
@@ -488,7 +494,13 @@ class GeneratorService:
                 },
             )
 
-            provider = get_provider(provider_name, api_key=api_key, base_url=base_url)
+            provider = build_workspace_llm_provider(
+                self._session,
+                workspace_id=workspace_id,
+                provider=provider_name,
+                api_key=api_key,
+                base_url=base_url,
+            )
             generator = PrdGenerator(
                 provider,
                 model=model,
@@ -646,7 +658,13 @@ class GeneratorService:
                 },
             )
 
-            provider = get_provider(provider_name, api_key=api_key, base_url=base_url)
+            provider = build_workspace_llm_provider(
+                self._session,
+                workspace_id=workspace_id,
+                provider=provider_name,
+                api_key=api_key,
+                base_url=base_url,
+            )
             generator = UrlSemanticGenerator(provider, model=model, prompt_override=prompt_content)
             result = await generator.run(
                 request.url, request.intent, seed=request.seed, max_cases=request.max_cases
@@ -801,7 +819,13 @@ class GeneratorService:
                 },
             )
 
-            provider = get_provider(provider_name, api_key=api_key, base_url=base_url)
+            provider = build_workspace_llm_provider(
+                self._session,
+                workspace_id=workspace_id,
+                provider=provider_name,
+                api_key=api_key,
+                base_url=base_url,
+            )
             generator = McpDiscoveryGenerator(provider, model=model, prompt_override=prompt_content)
             result = await generator.run(
                 mcp_tools,

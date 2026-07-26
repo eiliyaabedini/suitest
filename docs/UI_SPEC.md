@@ -698,6 +698,8 @@ Path: `/settings/llm` (sub-route in the Settings layout — the Settings sidebar
 
 **Capability:** this page is **always available** in all tiers (it is precisely how a user upgrades from ZERO to LOCAL/CLOUD).
 
+**AI Pass account card (optional):** Render a separate card above the provider form. Copy is "Connect AI Pass" and explains that requests spend from the connected account's shared AI Pass wallet without a provider API key. Never render AI Pass as a provider dropdown option or show an API-key field for it. Once connected, populate its model select only from the authenticated live catalog; show active model and Disconnect. A deployment without a configured public OAuth client ID shows a non-interactive administrator prerequisite message.
+
 **Form layout:**
 1. **Provider dropdown** — LiteLLM supported list with grouping:
    - *Cloud* — Anthropic / OpenAI / Google Gemini / Groq / OpenRouter / Bedrock / Vertex / DeepSeek / xAI / Mistral / Cohere / ...
